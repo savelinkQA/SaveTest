@@ -23,6 +23,7 @@ SaveTest позволяет:
 ## Связанные ссылки
 
 - **Демо доступ**: https://demo.save-test.ru/ (tester/tester123)
+- **Репозиторий примеров проекта с тест-кейсами**: https://github.com/savelinkQA/demo.save-test.test-case
 - **Репозиторий плагинов**: https://github.com/savelinkQA/savetest-plugins
 - **Расширение для VS Code (Open VSX)**: https://open-vsx.org/extension/savetest/savetest-tms-plugin
 - **Расширение для VS Code (Marketplace)**: https://marketplace.visualstudio.com/items?itemName=SaveTest.savetest-tms-plugin
