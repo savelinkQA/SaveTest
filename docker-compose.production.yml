@@ -1,0 +1,154 @@
+# Docker Compose конфигурация для продакшн окружения
+
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-savetest_db}
+      POSTGRES_USER: ${POSTGRES_USER:-savetest_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-savetest_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-savetest_user} -d ${POSTGRES_DB:-savetest_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - savetest-network
+
+  python-parser-plugin:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/python-parser-plugin:main
+    restart: unless-stopped
+    volumes:
+      - git_repos:/app/git_repos:ro
+    networks:
+      - savetest-network
+    environment:
+      - PLUGIN_NAME=python-parser
+      - LOG_LEVEL=${PLUGIN_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  gherkin-parser-plugin:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/gherkin-parser-plugin:main
+    restart: unless-stopped
+    volumes:
+      - git_repos:/app/git_repos:ro
+    networks:
+      - savetest-network
+    environment:
+      - PLUGIN_NAME=gherkin-parser
+      - LOG_LEVEL=${PLUGIN_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/backend:main
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-savetest_user}:${POSTGRES_PASSWORD:-savetest_password}@postgres:5432/${POSTGRES_DB:-savetest_db}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-your-super-secret-key-change-in-production}
+      - DEBUG=${DEBUG:-False}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - PLUGIN_URLS=${PLUGIN_URLS:-http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000}
+      - PLUGIN_TIMEOUT=${PLUGIN_TIMEOUT:-30}
+      - LOG_FILE_BACKUP_COUNT=${LOG_FILE_BACKUP_COUNT:-30}
+      - LOG_FLUSH_BATCH_SIZE=${LOG_FLUSH_BATCH_SIZE:-10}
+    volumes:
+      - git_repos:/app/git_repos
+      - avatars_data:/app/avatars
+      - project_avatars_data:/app/project_avatars
+      - reports_data:/app/reports
+      - result_attachments_data:/app/result_attachments
+      - wiki_sites_data:/app/wiki_sites
+      - logs_data:/app/logs
+      - app_data:/app/app/__data__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      python-parser-plugin:
+        condition: service_healthy
+      gherkin-parser-plugin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - savetest-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - savetest-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/frontend:main
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - savetest-network
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  git_repos:
+    driver: local
+  redis_data:
+    driver: local
+  avatars_data:
+    driver: local
+  project_avatars_data:
+    driver: local
+  reports_data:
+    driver: local
+  result_attachments_data:
+    driver: local
+  wiki_sites_data:
+    driver: local
+  logs_data:
+    driver: local
+  app_data:
+    driver: local
+  postgres_data:
+
+networks:
+  savetest-network:
+    driver: bridge
