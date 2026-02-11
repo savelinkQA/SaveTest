@@ -19,6 +19,27 @@ services:
     networks:
       - savetest-network
 
+  allure-service:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/allure-service:main
+    container_name: allure-service
+    restart: unless-stopped
+    ports:
+      - "${ALLURE_SERVICE_PORT:-3001}:3001"
+    volumes:
+      - allure_storage:/allure-storage
+    environment:
+      - PORT=3001
+      - STORAGE_PATH=/allure-storage
+      - NODE_ENV=production
+    networks:
+      - savetest-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   backend:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/backend:main
     restart: unless-stopped
@@ -35,6 +56,8 @@ services:
       - PLUGIN_TIMEOUT=${PLUGIN_TIMEOUT:-30}
       - LOG_FILE_BACKUP_COUNT=${LOG_FILE_BACKUP_COUNT:-30}
       - LOG_FLUSH_BATCH_SIZE=${LOG_FLUSH_BATCH_SIZE:-10}
+      - ALLURE_SERVICE_URL=${ALLURE_SERVICE_URL:-http://allure-service:3001}
+      - ALLURE_STORAGE_PATH=/allure-storage
     volumes:
       - git_repos:/app/git_repos
       - avatars_data:/app/avatars
@@ -44,10 +67,13 @@ services:
       - wiki_sites_data:/app/wiki_sites
       - logs_data:/app/logs
       - app_data:/app/app/__data__
+      - allure_storage:/allure-storage
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      allure-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -71,6 +97,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  webhook-worker:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/webhook-worker:main
+    container_name: webhook-worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-savetest_user}:${POSTGRES_PASSWORD:-savetest_password}@postgres:5432/${POSTGRES_DB:-savetest_db}
+      - REDIS_URL=redis://redis:6379/0
+      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-30}
+      - WORKER_RETRY_COUNT=${WORKER_RETRY_COUNT:-2}
+      - WORKER_RETRY_DELAY=${WORKER_RETRY_DELAY:-5}
+      - LOG_LEVEL=${WORKER_LOG_LEVEL:-INFO}
+      - LOGS_DIR=/app/logs
+    volumes:
+      - logs_data:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - savetest-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   frontend:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/frontend:main
@@ -110,6 +164,8 @@ volumes:
   app_data:
     driver: local
   postgres_data:
+  allure_storage:
+    driver: local
 
 networks:
   savetest-network:

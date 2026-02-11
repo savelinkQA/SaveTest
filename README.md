@@ -22,7 +22,7 @@ SaveTest позволяет:
 
 ## Связанные ссылки
 
-- **Демо доступ**: https://demo.save-test.ru/ (tester/tester123)
+- **Демо доступ**: https://demo.save-test.ru/
 - **Репозиторий примеров проекта с тест-кейсами**: https://github.com/savelinkQA/demo.save-test.test-case
 - **Репозиторий плагинов**: https://github.com/savelinkQA/savetest-plugins
 - **Расширение для VS Code (Open VSX)**: https://open-vsx.org/extension/savetest/savetest-tms-plugin
@@ -43,6 +43,19 @@ SaveTest позволяет:
 
 В этом репозитории представлены примеры конфигурации Docker Compose для установки SaveTest в различных сценариях использования.
 
+### Состав сервисов (контейнеров)
+
+| Сервис | Назначение |
+|--------|------------|
+| **postgres** | База данных PostgreSQL |
+| **redis** | Кэш и очереди |
+| **backend** | API SaveTest (Python) |
+| **frontend** | Веб-интерфейс |
+| **allure-service** | Сервис для генерации и просмотра Allure-отчётов |
+| **webhook-worker** | Воркер для асинхронной обработки webhook-запросов (очереди Redis) |
+| **python-parser-plugin** | Плагин парсинга Python-тестов (только в production с плагинами) |
+| **gherkin-parser-plugin** | Плагин парсинга Gherkin (только в production с плагинами) |
+
 ## Файлы конфигурации
 
 ### Production (продакшн)
@@ -52,8 +65,9 @@ SaveTest позволяет:
 **Назначение:** Конфигурация для продакшн окружения
 
 **Особенности:**
-- Использует готовые образы из container registry
+- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker, плагины)
 - Поддержка переменных окружения через `${VARIABLE:-default}`
+- Включает Allure и webhook-worker
 - Оптимизирована для стабильной работы
 
 **Использование:**
@@ -68,7 +82,7 @@ docker-compose up -d
 **Назначение:** Конфигурация для продакшн окружения **БЕЗ ПЛАГИНОВ**
 
 **Особенности:**
-- Использует готовые образы из container registry
+- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker)
 - Не включает плагины парсеров
 - Поддержка переменных окружения через `${VARIABLE:-default}`
 - Меньше потребление ресурсов
@@ -88,7 +102,7 @@ docker-compose up -d
 
 **Особенности:**
 - Все параметры жестко заданы (без переменных окружения)
-- Минимальная конфигурация
+- Минимальная конфигурация с backend, frontend, allure-service, webhook-worker
 - Подходит для быстрого тестирования и демонстрации
 - Не требует настройки .env файла
 
@@ -142,6 +156,7 @@ DEBUG=False
 ALLOWED_ORIGINS=http://localhost:8080
 UVICORN_WORKERS=4
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
+ALLURE_SERVICE_URL=http://allure-service:3001
 ```
 
 **⚠️ ВАЖНО:** В продакшене обязательно измените `SECRET_KEY` и `POSTGRES_PASSWORD` на надежные значения!
@@ -309,6 +324,8 @@ docker-compose restart backend
 | `PLUGIN_TIMEOUT` | Таймаут запросов к плагинам парсеров в секундах | `int` | `30` | Нет | Увеличьте значение для больших файлов или медленных парсеров |
 | `LOG_FILE_BACKUP_COUNT` | Количество файлов логов для хранения (дни) | `int` | `30` | Нет | Старые логи автоматически удаляются при превышении лимита |
 | `LOG_FLUSH_BATCH_SIZE` | Количество записей перед принудительным flush в файл | `int` | `10` | Нет | Баланс между производительностью и надежностью. Меньше значение = больше надежность, но ниже производительность |
+| `ALLURE_SERVICE_URL` | URL сервиса Allure для отчётов | `string` | `http://allure-service:3001` | Нет | Используется бекендом для загрузки и отображения Allure-отчётов |
+| `ALLURE_STORAGE_PATH` | Путь к хранилищу Allure внутри контейнера бекенда | `string` | `/allure-storage` | Нет | Должен совпадать с volume, проброшенным от allure-service |
 | `APP_HOST` | Хост для привязки сервера | `string` | `0.0.0.0` | Нет | Обычно не требуется изменять, используется внутри контейнера |
 | `APP_PORT` | Порт для привязки сервера | `int` | `8000` | Нет | Обычно не требуется изменять, используется внутри контейнера |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни access токена в минутах | `int` | `10080` (7 дней) | Нет | |
@@ -320,6 +337,27 @@ docker-compose restart backend
 |------------|----------|-----|--------------|-------------|------------|
 | `FRONTEND_PORT` | Порт для проброса фронтенда на хост | `int` | `8080` | Нет | Используется только в docker-compose для маппинга портов |
 | `BACKEND_PORT` | Порт для проброса бекенда на хост | `int` | `8001` | Нет | Используется только в docker-compose для маппинга портов |
+| `ALLURE_SERVICE_PORT` | Порт для проброса Allure Service на хост | `int` | `3001` | Нет | Используется только в docker-compose для маппинга портов (production) |
+
+### Allure Service
+
+| Переменная | Описание | Тип | По умолчанию | Обязательно | Примечания |
+|------------|----------|-----|--------------|-------------|------------|
+| `PORT` | Порт внутри контейнера | `int` | `3001` | Нет | Задаётся в docker-compose |
+| `STORAGE_PATH` | Путь к директории хранения отчётов | `string` | `/allure-storage` | Нет | Должен совпадать с volume |
+| `NODE_ENV` | Окружение Node.js | `string` | `production` | Нет | |
+
+### Webhook Worker
+
+| Переменная | Описание | Тип | По умолчанию | Обязательно | Примечания |
+|------------|----------|-----|--------------|-------------|------------|
+| `DATABASE_URL` | URL подключения к PostgreSQL | `string` | — | Да | Формируется из `POSTGRES_*` в production |
+| `REDIS_URL` | URL подключения к Redis | `string` | `redis://redis:6379/0` | Нет | Очереди задач |
+| `WORKER_TIMEOUT` | Таймаут обработки задачи (сек) | `int` | `30` | Нет | |
+| `WORKER_RETRY_COUNT` | Количество повторов при ошибке | `int` | `2` | Нет | |
+| `WORKER_RETRY_DELAY` | Задержка между повторами (сек) | `int` | `5` | Нет | |
+| `LOG_LEVEL` | Уровень логирования | `string` | `INFO` | Нет | В production: `WORKER_LOG_LEVEL` |
+| `LOGS_DIR` | Директория логов внутри контейнера | `string` | `/app/logs` | Нет | Должна совпадать с volume `logs_data` |
 
 ### Плагины парсеров
 
@@ -345,6 +383,8 @@ backend:
     - DEBUG=False
     - ALLOWED_ORIGINS=http://localhost:8080
     - PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
+    - ALLURE_SERVICE_URL=http://allure-service:3001
+    - ALLURE_STORAGE_PATH=/allure-storage
 ```
 
 #### Продакшн конфигурация
@@ -377,6 +417,7 @@ DEBUG=False
 ALLOWED_ORIGINS=https://app.example.com
 UVICORN_WORKERS=4
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
+ALLURE_SERVICE_URL=http://allure-service:3001
 ```
 
 Затем в docker-compose.yml:
