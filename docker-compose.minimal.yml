@@ -32,6 +32,11 @@ services:
       - PORT=3001
       - STORAGE_PATH=/allure-storage
       - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - savetest-network
     healthcheck:

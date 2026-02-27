@@ -30,11 +30,11 @@ services:
       - PLUGIN_NAME=python-parser
       - LOG_LEVEL=${PLUGIN_LOG_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request, json; r=urllib.request.urlopen(\"http://localhost:8000/config\", timeout=5); data=json.loads(r.read()); assert data.get(\"language\"), \"no language in config\"'"]
       interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   gherkin-parser-plugin:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/gherkin-parser-plugin:main
@@ -47,11 +47,11 @@ services:
       - PLUGIN_NAME=gherkin-parser
       - LOG_LEVEL=${PLUGIN_LOG_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request, json; r=urllib.request.urlopen(\"http://localhost:8000/config\", timeout=5); data=json.loads(r.read()); assert data.get(\"language\"), \"no language in config\"'"]
       interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   allure-service:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/allure-service:main
@@ -65,6 +65,11 @@ services:
       - PORT=3001
       - STORAGE_PATH=/allure-storage
       - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - savetest-network
     healthcheck:
