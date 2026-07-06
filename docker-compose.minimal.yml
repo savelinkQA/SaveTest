@@ -60,12 +60,19 @@ services:
       - UVICORN_WORKERS=4
       - ALLURE_SERVICE_URL=http://allure-service:3001
       - ALLURE_STORAGE_PATH=/allure-storage
+      - LIVEKIT_URL=
+      - LIVEKIT_WS_URL=
+      - LIVEKIT_API_KEY=
+      - LIVEKIT_API_SECRET=
+      - CALL_CHAT_UPLOAD_DIR=/app/call_chat_uploads
     volumes:
       - git_repos:/app/git_repos
       - avatars_data:/app/avatars
       - project_avatars_data:/app/project_avatars
+      - project_report_assets_data:/app/project_report_assets
       - reports_data:/app/reports
       - result_attachments_data:/app/result_attachments
+      - call_chat_uploads_data:/app/call_chat_uploads
       - wiki_sites_data:/app/wiki_sites
       - logs_data:/app/logs
       - app_data:/app/app/__data__
@@ -154,6 +161,10 @@ volumes:
   avatars_data:
     driver: local
   project_avatars_data:
+    driver: local
+  project_report_assets_data:
+    driver: local
+  call_chat_uploads_data:
     driver: local
   reports_data:
     driver: local

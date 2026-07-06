@@ -97,12 +97,20 @@ services:
       - LOG_FLUSH_BATCH_SIZE=${LOG_FLUSH_BATCH_SIZE:-10}
       - ALLURE_SERVICE_URL=${ALLURE_SERVICE_URL:-http://allure-service:3001}
       - ALLURE_STORAGE_PATH=/allure-storage
+      - MCP_SERVER_URL=http://mcp-server:3000
+      - LIVEKIT_URL=http://livekit:7880
+      - LIVEKIT_WS_URL=${LIVEKIT_WS_URL:-ws://${STAND_HOST:-localhost}:7880}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-devsecret_change_me_in_production_please_32chars}
+      - CALL_CHAT_UPLOAD_DIR=/app/call_chat_uploads
     volumes:
       - git_repos:/app/git_repos
       - avatars_data:/app/avatars
       - project_avatars_data:/app/project_avatars
+      - project_report_assets_data:/app/project_report_assets
       - reports_data:/app/reports
       - result_attachments_data:/app/result_attachments
+      - call_chat_uploads_data:/app/call_chat_uploads
       - wiki_sites_data:/app/wiki_sites
       - logs_data:/app/logs
       - app_data:/app/app/__data__
@@ -118,12 +126,36 @@ services:
         condition: service_healthy
       allure-service:
         condition: service_healthy
+      livekit:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - savetest-network
+
+  mcp-server:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/mcp-server:main
+    container_name: mcp-server
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - SAVETEST_API_URL=http://backend:8000
+      - NODE_ENV=production
+    ports:
+      - "${MCP_SERVER_PORT:-3002}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - savetest-network
 
@@ -140,6 +172,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  livekit:
+    image: cr.yandex/crp8hln0vgikkl8djavt/save-test/livekit:main
+    container_name: livekit
+    restart: unless-stopped
+    environment:
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_change_me_in_production_please_32chars}"
+      - LIVEKIT_WS_URL=${LIVEKIT_WS_URL:-ws://${STAND_HOST:-localhost}:7880}
+      - LIVEKIT_RTC_NODE_IP=${LIVEKIT_RTC_NODE_IP:-${STAND_HOST:-}}
+      - LIVEKIT_RTC_USE_EXTERNAL_IP=${LIVEKIT_RTC_USE_EXTERNAL_IP:-}
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"
+      - "${LIVEKIT_TCP_PORT:-7881}:7881"
+      - "${LIVEKIT_UDP_RANGE:-50000-50100}:50000-50100/udp"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - savetest-network
 
   webhook-worker:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/webhook-worker:main
@@ -177,6 +228,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      mcp-server:
+        condition: service_healthy
     networks:
       - savetest-network
     stop_grace_period: 15s
@@ -195,6 +248,10 @@ volumes:
   avatars_data:
     driver: local
   project_avatars_data:
+    driver: local
+  project_report_assets_data:
+    driver: local
+  call_chat_uploads_data:
     driver: local
   reports_data:
     driver: local

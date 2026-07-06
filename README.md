@@ -55,6 +55,8 @@ SaveTest позволяет:
 | **webhook-worker** | Воркер для асинхронной обработки webhook-запросов (очереди Redis) |
 | **python-parser-plugin** | Плагин парсинга Python-тестов (только в production с плагинами) |
 | **gherkin-parser-plugin** | Плагин парсинга Gherkin (только в production с плагинами) |
+| **mcp-server** | MCP-сервер для AI-ассистентов (Cursor, VS Code и др.) |
+| **livekit** | Сервер WebRTC для голосовой связи в CallBox |
 
 ## Файлы конфигурации
 
@@ -65,9 +67,9 @@ SaveTest позволяет:
 **Назначение:** Конфигурация для продакшн окружения
 
 **Особенности:**
-- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker, плагины)
+- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker, mcp-server, livekit, плагины)
 - Поддержка переменных окружения через `${VARIABLE:-default}`
-- Включает Allure и webhook-worker
+- Включает Allure, webhook-worker, MCP и голосовую связь CallBox
 - Оптимизирована для стабильной работы
 
 **Использование:**
@@ -82,14 +84,30 @@ docker-compose up -d
 **Назначение:** Конфигурация для продакшн окружения **БЕЗ ПЛАГИНОВ**
 
 **Особенности:**
-- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker)
+- Использует готовые образы из container registry (backend, frontend, allure-service, webhook-worker, mcp-server, livekit)
 - Не включает плагины парсеров
 - Поддержка переменных окружения через `${VARIABLE:-default}`
-- Меньше потребление ресурсов
+- Меньше потребление ресурсов на парсеры
 
 **Использование:**
 ```bash
 docker-compose up -d
+```
+
+---
+
+#### docker-compose.production.no-livekit.yml
+
+**Назначение:** Продакшен **без LiveKit** (CallBox — только текстовый чат). MCP-сервер включён.
+
+**Особенности:**
+- Те же образы, что в `docker-compose.production.yml`, но без контейнера `livekit`
+- Пустые `LIVEKIT_*` в backend — голос отключён
+
+**Использование:**
+```bash
+cp docker-compose.production.no-livekit.yml docker-compose.yml
+docker compose up -d
 ```
 
 ---
@@ -103,6 +121,7 @@ docker-compose up -d
 **Особенности:**
 - Все параметры жестко заданы (без переменных окружения)
 - Минимальная конфигурация с backend, frontend, allure-service, webhook-worker
+- **Без** mcp-server и livekit — для полного стека используйте production-манифест
 - Подходит для быстрого тестирования и демонстрации
 - Не требует настройки .env файла
 
@@ -137,6 +156,11 @@ cp docker-compose.production.yml docker-compose.yml
 cp docker-compose.production.no-plugins.yml docker-compose.yml
 ```
 
+Для продакшена без голоса (только чат CallBox):
+```bash
+cp docker-compose.production.no-livekit.yml docker-compose.yml
+```
+
 Для быстрого старта:
 ```bash
 cp docker-compose.minimal.yml docker-compose.yml
@@ -144,10 +168,15 @@ cp docker-compose.minimal.yml docker-compose.yml
 
 2. **Настройте переменные окружения (опционально):**
 
-Создайте файл `.env` в корне проекта:
+Скопируйте пример и отредактируйте значения (в т.ч. LiveKit для голоса в CallBox):
 
 ```bash
-# .env
+cp .env.example .env
+```
+
+Минимальный набор в `.env`:
+
+```bash
 POSTGRES_DB=savetest_db
 POSTGRES_USER=savetest_user
 POSTGRES_PASSWORD=your-secure-password
@@ -157,6 +186,9 @@ ALLOWED_ORIGINS=http://localhost:8080
 UVICORN_WORKERS=4
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
 ALLURE_SERVICE_URL=http://allure-service:3001
+LIVEKIT_API_KEY=your-livekit-key
+LIVEKIT_API_SECRET=your-livekit-secret-at-least-32-chars
+STAND_HOST=192.168.1.50
 ```
 
 **⚠️ ВАЖНО:** В продакшене обязательно измените `SECRET_KEY` и `POSTGRES_PASSWORD` на надежные значения!
@@ -260,6 +292,10 @@ server {
         # Отключаем буферизацию для WebSocket
         proxy_buffering off;
     }
+
+    # MCP: frontend-nginx проксирует /mcp на mcp-server (включён в рекомендуемом манифесте).
+
+    # LiveKit: пробросьте TCP 7880, 7881 и UDP 50000-50100 на хост с контейнером livekit.
 }
 ```
 
@@ -330,6 +366,14 @@ docker-compose restart backend
 | `APP_PORT` | Порт для привязки сервера | `int` | `8000` | Нет | Обычно не требуется изменять, используется внутри контейнера |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни access токена в минутах | `int` | `10080` (7 дней) | Нет | |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Время жизни refresh токена в днях | `int` | `14` (2 недели) | Нет | |
+| `MCP_SERVER_URL` | Внутренний URL MCP-сервера | `string` | `http://mcp-server:3000` | Нет | В рекомендуемом манифесте |
+| `CALL_CHAT_UPLOAD_DIR` | Каталог вложений чата CallBox | `string` | `/app/call_chat_uploads` | Нет | Согласовать с volume `call_chat_uploads_data` |
+| `LIVEKIT_URL` | HTTP API LiveKit (внутри Docker) | `string` | `http://livekit:7880` | Нет | Пусто в `no-livekit` манифесте |
+| `LIVEKIT_WS_URL` | WebSocket URL для клиентов | `string` | пусто | Нет | Например `wss://calls.example.com:7880` |
+| `LIVEKIT_API_KEY` | API-ключ LiveKit | `string` | пусто | Нет | Обязателен вместе с secret для голоса |
+| `LIVEKIT_API_SECRET` | API-секрет LiveKit (≥32 символов) | `string` | пусто | Нет | Смените в продакшене |
+| `STAND_HOST` | IP или хост стенда для LiveKit ICE | `string` | — | Нет | Упрощает настройку LAN-стенда |
+| `LIVEKIT_RTC_NODE_IP` | Публичный IP для WebRTC ICE | `string` | — | Нет | WAN-адрес при NAT; только IP, не FQDN |
 
 ### Frontend
 
@@ -338,6 +382,10 @@ docker-compose restart backend
 | `FRONTEND_PORT` | Порт для проброса фронтенда на хост | `int` | `8080` | Нет | Используется только в docker-compose для маппинга портов |
 | `BACKEND_PORT` | Порт для проброса бекенда на хост | `int` | `8001` | Нет | Используется только в docker-compose для маппинга портов |
 | `ALLURE_SERVICE_PORT` | Порт для проброса Allure Service на хост | `int` | `3001` | Нет | Используется только в docker-compose для маппинга портов (production) |
+| `MCP_SERVER_PORT` | Порт MCP на хосте | `int` | `3002` | Нет | |
+| `LIVEKIT_PORT` | Сигналинг LiveKit (TCP) | `int` | `7880` | Нет | |
+| `LIVEKIT_TCP_PORT` | ICE/TCP fallback LiveKit | `int` | `7881` | Нет | |
+| `LIVEKIT_UDP_RANGE` | Диапазон UDP для медиа | `string` | `50000-50100` | Нет | Проброс на фаерволе для голоса извне |
 
 ### Allure Service
 
@@ -365,6 +413,20 @@ docker-compose restart backend
 |------------|----------|-----|--------------|-------------|------------|
 | `PLUGIN_NAME` | Имя плагина (для логирования) | `string` | Зависит от плагина (`python-parser`, `gherkin-parser`) | Нет | |
 | `PLUGIN_LOG_LEVEL` | Уровень логирования плагина | `string` | `INFO` | Нет | Возможные значения: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+
+### MCP Server (опционально)
+
+| Переменная | Описание | Тип | По умолчанию | Обязательно | Примечания |
+|------------|----------|-----|--------------|-------------|------------|
+| `SAVETEST_API_URL` | URL бэкенда SaveTest | `string` | `http://backend:8000` | Нет | Внутри Docker-сети |
+| `PORT` | Порт HTTP MCP-сервера | `int` | `3000` | Нет | |
+
+### LiveKit (опционально)
+
+| Переменная | Описание | Тип | По умолчанию | Обязательно | Примечания |
+|------------|----------|-----|--------------|-------------|------------|
+| `LIVEKIT_KEYS` | Пара `ключ: секрет` для LiveKit | `string` | из `LIVEKIT_API_KEY` / `SECRET` | Нет | Формат с пробелом после `:` |
+| `LIVEKIT_RTC_USE_EXTERNAL_IP` | Использовать внешний IP в ICE | `bool` | авто | Нет | `true` при заданном `LIVEKIT_RTC_NODE_IP` |
 
 ### Redis
 
@@ -405,10 +467,15 @@ backend:
 
 ### Использование .env файла
 
-Рекомендуется использовать `.env` файл для хранения переменных окружения:
+В репозитории есть **[`.env.example`](.env.example)** — шаблон с настройкой LiveKit, CORS и секретов. Скопируйте и отредактируйте:
 
 ```bash
-# .env
+cp .env.example .env
+```
+
+Пример содержимого (полный шаблон — в `.env.example`):
+
+```bash
 POSTGRES_DB=savetest_db
 POSTGRES_USER=savetest_user
 POSTGRES_PASSWORD=your-secure-password
@@ -418,6 +485,9 @@ ALLOWED_ORIGINS=https://app.example.com
 UVICORN_WORKERS=4
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
 ALLURE_SERVICE_URL=http://allure-service:3001
+LIVEKIT_API_KEY=your-livekit-key
+LIVEKIT_API_SECRET=your-livekit-secret-at-least-32-chars
+STAND_HOST=192.168.1.50
 ```
 
 Затем в docker-compose.yml:
