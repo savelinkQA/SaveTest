@@ -22,13 +22,13 @@ SaveTest позволяет:
 
 ## Связанные ссылки
 
-- **Демо доступ**: https://demo.save-test.ru/
+- **Облачная платформа**: https://lk.save-test.ru
 - **Репозиторий примеров проекта с тест-кейсами**: https://github.com/savelinkQA/demo.save-test.test-case
 - **Репозиторий плагинов**: https://github.com/savelinkQA/savetest-plugins
 - **Расширение для VS Code (Open VSX)**: https://open-vsx.org/extension/savetest/savetest-tms-plugin
 - **Расширение для VS Code (Marketplace)**: https://marketplace.visualstudio.com/items?itemName=SaveTest.savetest-tms-plugin
 - **Подробнее о продукте**: https://save-test.ru
-- **Приобрести лицензию**: https://save-test.ru
+- **Приобрести лицензию**: https://lk.save-test.ru
 
 ### Лицензирование
 
@@ -37,7 +37,7 @@ SaveTest позволяет:
 - **1 пользователь**
 - **10 тест-ранов**
 
-Для расширения возможностей системы необходимо приобрести лицензию на сайте https://save-test.ru
+Для расширения возможностей системы необходимо приобрести лицензию на сайте https://lk.save-test.ru
 
 ## О репозитории
 
