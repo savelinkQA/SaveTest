@@ -24,8 +24,6 @@ services:
     image: cr.yandex/crp8hln0vgikkl8djavt/save-test/allure-service:main
     container_name: allure-service
     restart: unless-stopped
-    ports:
-      - "3001:3001"
     volumes:
       - allure_storage:/allure-storage
     environment:
@@ -57,7 +55,20 @@ services:
       - SECRET_KEY=your-super-secret-key-change-in-production
       - DEBUG=False
       - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080
-      - UVICORN_WORKERS=4
+      - UVICORN_WORKERS=8
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-}
+      - DB_STATEMENT_TIMEOUT_MS=${DB_STATEMENT_TIMEOUT_MS:-}
+      - DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=${DB_IDLE_IN_TRANSACTION_TIMEOUT_MS:-}
+      - THREADPOOL_SIZE=${THREADPOOL_SIZE:-}
+      - DB_ADMISSION_LIMIT=${DB_ADMISSION_LIMIT:-}
+      - DB_ADMISSION_TIMEOUT=${DB_ADMISSION_TIMEOUT:-}
+      - MALLOC_ARENA_MAX=2
+      - GUNICORN_MAX_REQUESTS=1000
+      - GUNICORN_MAX_REQUESTS_JITTER=200
+      - GUNICORN_TIMEOUT=1000
+      - GUNICORN_GRACEFUL_TIMEOUT=30
       - ALLURE_SERVICE_URL=http://allure-service:3001
       - ALLURE_STORAGE_PATH=/allure-storage
       - LIVEKIT_URL=

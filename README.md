@@ -183,7 +183,7 @@ POSTGRES_PASSWORD=your-secure-password
 SECRET_KEY=your-super-secret-key
 DEBUG=False
 ALLOWED_ORIGINS=http://localhost:8080
-UVICORN_WORKERS=4
+UVICORN_WORKERS=8
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
 ALLURE_SERVICE_URL=http://allure-service:3001
 LIVEKIT_API_KEY=your-livekit-key
@@ -355,11 +355,21 @@ docker-compose restart backend
 | `SECRET_KEY` | Секретный ключ для подписи JWT токенов и шифрования | `string` | `your-secret-key-here` | Да (в продакшене) | КРИТИЧЕСКИ ВАЖНО: В продакшене обязательно измените на случайную строку (минимум 32 символа). Генерация: `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DEBUG` | Включает режим отладки (подробные логи, трассировка ошибок) | `bool` | `False` | Нет | В продакшене всегда должно быть `False` для безопасности |
 | `ALLOWED_ORIGINS` | Список разрешенных источников (origins) для CORS запросов | `string` | `http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080` | Нет | Формат: список URL через запятую или JSON массив. Для продакшена укажите реальные домены вашего фронтенда |
-| `UVICORN_WORKERS` | Количество worker процессов для обработки запросов | `int` | `4` | Нет | Рекомендации: 2-4 для небольших нагрузок, 4-8 для средних, 8-16 для высоких. Формула: `workers = (max_connections - 20) / 2`. Каждый worker создает свой пул соединений к БД |
+| `UVICORN_WORKERS` | Количество worker процессов для обработки запросов | `int` | `8` | Нет | Рекомендации: 2-4 для небольших нагрузок, 4-8 для средних, 8-16 для высоких. Каждый worker создает свой пул соединений к БД |
+| `DB_POOL_SIZE` | Размер пула соединений к БД на worker | `int` | пусто | Нет | Пустое значение — дефолт приложения |
+| `DB_MAX_OVERFLOW` | Дополнительные соединения сверх пула | `int` | пусто | Нет | |
+| `DB_POOL_TIMEOUT` | Ожидание свободного соединения, секунды | `int` | пусто | Нет | |
+| `DB_STATEMENT_TIMEOUT_MS` | Таймаут SQL-запроса, миллисекунды | `int` | пусто | Нет | |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` | Таймаут простоя внутри транзакции, миллисекунды | `int` | пусто | Нет | |
+| `THREADPOOL_SIZE` | Размер пула потоков | `int` | пусто | Нет | |
+| `DB_ADMISSION_LIMIT` | Лимит одновременных обращений к БД | `int` | пусто | Нет | |
+| `DB_ADMISSION_TIMEOUT` | Ожидание допуска к БД, секунды | `int` | пусто | Нет | |
+| `MALLOC_ARENA_MAX` | Число арен аллокатора | `int` | `2` | Нет | Задано в манифесте, снижает расход памяти |
+| `GUNICORN_MAX_REQUESTS` | Запросов на worker до перезапуска | `int` | `1000` | Нет | |
+| `GUNICORN_MAX_REQUESTS_JITTER` | Случайный разброс порога перезапуска | `int` | `200` | Нет | |
+| `GUNICORN_TIMEOUT` | Таймаут обработки запроса worker, секунды | `int` | `1000` | Нет | |
+| `GUNICORN_GRACEFUL_TIMEOUT` | Время мягкой остановки worker, секунды | `int` | `30` | Нет | |
 | `PLUGIN_URLS` | Список URL плагинов парсеров через запятую | `string` | `http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000` | Нет | Формат: `http://plugin1:port,http://plugin2:port`. Альтернативно можно использовать `PLUGIN_1_URL`, `PLUGIN_2_URL`, и т.д. Бекенд автоматически получает конфигурацию плагинов через `/config` endpoint при старте |
-| `PLUGIN_TIMEOUT` | Таймаут запросов к плагинам парсеров в секундах | `int` | `30` | Нет | Увеличьте значение для больших файлов или медленных парсеров |
-| `LOG_FILE_BACKUP_COUNT` | Количество файлов логов для хранения (дни) | `int` | `30` | Нет | Старые логи автоматически удаляются при превышении лимита |
-| `LOG_FLUSH_BATCH_SIZE` | Количество записей перед принудительным flush в файл | `int` | `10` | Нет | Баланс между производительностью и надежностью. Меньше значение = больше надежность, но ниже производительность |
 | `ALLURE_SERVICE_URL` | URL сервиса Allure для отчётов | `string` | `http://allure-service:3001` | Нет | Используется бекендом для загрузки и отображения Allure-отчётов |
 | `ALLURE_STORAGE_PATH` | Путь к хранилищу Allure внутри контейнера бекенда | `string` | `/allure-storage` | Нет | Должен совпадать с volume, проброшенным от allure-service |
 | `APP_HOST` | Хост для привязки сервера | `string` | `0.0.0.0` | Нет | Обычно не требуется изменять, используется внутри контейнера |
@@ -381,7 +391,6 @@ docker-compose restart backend
 |------------|----------|-----|--------------|-------------|------------|
 | `FRONTEND_PORT` | Порт для проброса фронтенда на хост | `int` | `8080` | Нет | Используется только в docker-compose для маппинга портов |
 | `BACKEND_PORT` | Порт для проброса бекенда на хост | `int` | `8001` | Нет | Используется только в docker-compose для маппинга портов |
-| `ALLURE_SERVICE_PORT` | Порт для проброса Allure Service на хост | `int` | `3001` | Нет | Используется только в docker-compose для маппинга портов (production) |
 | `MCP_SERVER_PORT` | Порт MCP на хосте | `int` | `3002` | Нет | |
 | `LIVEKIT_PORT` | Сигналинг LiveKit (TCP) | `int` | `7880` | Нет | |
 | `LIVEKIT_TCP_PORT` | ICE/TCP fallback LiveKit | `int` | `7881` | Нет | |
@@ -461,8 +470,8 @@ backend:
     - ALLOWED_ORIGINS=https://app.example.com,https://www.example.com
     - UVICORN_WORKERS=8
     - PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
-    - PLUGIN_TIMEOUT=60
-    - LOG_FILE_BACKUP_COUNT=90
+    - DB_POOL_SIZE=10
+    - GUNICORN_TIMEOUT=1000
 ```
 
 ### Использование .env файла
@@ -482,7 +491,7 @@ POSTGRES_PASSWORD=your-secure-password
 SECRET_KEY=your-super-secret-key
 DEBUG=False
 ALLOWED_ORIGINS=https://app.example.com
-UVICORN_WORKERS=4
+UVICORN_WORKERS=8
 PLUGIN_URLS=http://python-parser-plugin:8000,http://gherkin-parser-plugin:8000
 ALLURE_SERVICE_URL=http://allure-service:3001
 LIVEKIT_API_KEY=your-livekit-key
